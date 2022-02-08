@@ -9,7 +9,7 @@ long_description = 'Translate events from a Traktor S4 mk1 DJ controller \
 
 setup(
     name='traktor-s4-mk1-midify',
-    version='0.0.1',
+    version='0.0.2',
     author='Conal Moloney',
     author_email='blaxpot@blax.site',
     url='https://github.com/blaxpot/traktor-s4-mk1-midify',
@@ -18,7 +18,7 @@ setup(
     long_description_content_type="text/markdown",
     license='MIT',
     scripts=['midify.py'],
-    entry_points={'console_scripts': ['traktor-s4-mk1-midify=midify:main']},
+    entry_points={'console_scripts': ['traktor-s4-mk1-midify=midify:main', 'traktor-s4-mk1-print-events=midify:print_events']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

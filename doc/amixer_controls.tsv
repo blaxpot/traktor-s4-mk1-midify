@@ -1,0 +1,164 @@
+numid	LED name
+15	LED: Channel A: <
+14	LED: Channel A: >
+23	LED: Channel A: Active
+24	LED: Channel A: Cue
+25	LED: Channel A: FX1
+26	LED: Channel A: FX2
+16	LED: Channel A: Meter 1
+17	LED: Channel A: Meter 2
+18	LED: Channel A: Meter 3
+19	LED: Channel A: Meter 4
+20	LED: Channel A: Meter 5
+21	LED: Channel A: Meter 6
+22	LED: Channel A: Meter clip
+28	LED: Channel B: <
+27	LED: Channel B: >
+36	LED: Channel B: Active
+37	LED: Channel B: Cue
+38	LED: Channel B: FX1
+39	LED: Channel B: FX2
+29	LED: Channel B: Meter 1
+30	LED: Channel B: Meter 2
+31	LED: Channel B: Meter 3
+32	LED: Channel B: Meter 4
+33	LED: Channel B: Meter 5
+34	LED: Channel B: Meter 6
+35	LED: Channel B: Meter clip
+41	LED: Channel C: <
+40	LED: Channel C: >
+49	LED: Channel C: Active
+50	LED: Channel C: Cue
+51	LED: Channel C: FX1
+52	LED: Channel C: FX2
+42	LED: Channel C: Meter 1
+43	LED: Channel C: Meter 2
+44	LED: Channel C: Meter 3
+45	LED: Channel C: Meter 4
+46	LED: Channel C: Meter 5
+47	LED: Channel C: Meter 6
+48	LED: Channel C: Meter clip
+54	LED: Channel D: <
+53	LED: Channel D: >
+62	LED: Channel D: Active
+63	LED: Channel D: Cue
+64	LED: Channel D: FX1
+65	LED: Channel D: FX2
+55	LED: Channel D: Meter 1
+56	LED: Channel D: Meter 2
+57	LED: Channel D: Meter 3
+58	LED: Channel D: Meter 4
+59	LED: Channel D: Meter 5
+60	LED: Channel D: Meter 6
+61	LED: Channel D: Meter clip
+66	LED: Deck A: 1 (blue)
+67	LED: Deck A: 1 (green)
+68	LED: Deck A: 2 (blue)
+69	LED: Deck A: 2 (green)
+70	LED: Deck A: 3 (blue)
+71	LED: Deck A: 3 (green)
+72	LED: Deck A: 4 (blue)
+73	LED: Deck A: 4 (green)
+80	LED: Deck A: Cue
+86	LED: Deck A: Deck A
+87	LED: Deck A: Deck C
+75	LED: Deck A: Deck C button
+94	LED: Deck A: Digit 1 - A
+95	LED: Deck A: Digit 1 - B
+96	LED: Deck A: Digit 1 - C
+97	LED: Deck A: Digit 1 - D
+98	LED: Deck A: Digit 1 - E
+99	LED: Deck A: Digit 1 - F
+100	LED: Deck A: Digit 1 - G
+101	LED: Deck A: Digit 1 - dot
+102	LED: Deck A: Digit 2 - A
+103	LED: Deck A: Digit 2 - B
+104	LED: Deck A: Digit 2 - C
+105	LED: Deck A: Digit 2 - D
+106	LED: Deck A: Digit 2 - E
+107	LED: Deck A: Digit 2 - F
+108	LED: Deck A: Digit 2 - G
+109	LED: Deck A: Digit 2 - dot
+76	LED: Deck A: In
+85	LED: Deck A: Keylock
+74	LED: Deck A: Load
+84	LED: Deck A: Master
+89	LED: Deck A: On Air
+77	LED: Deck A: Out
+81	LED: Deck A: Play
+90	LED: Deck A: Sample 1
+91	LED: Deck A: Sample 2
+92	LED: Deck A: Sample 3
+93	LED: Deck A: Sample 4
+88	LED: Deck A: Samples
+78	LED: Deck A: Shift
+79	LED: Deck A: Sync
+83	LED: Deck A: Tempo down
+82	LED: Deck A: Tempo up
+110	LED: Deck B: 1 (blue)
+111	LED: Deck B: 1 (green)
+112	LED: Deck B: 2 (blue)
+113	LED: Deck B: 2 (green)
+114	LED: Deck B: 3 (blue)
+115	LED: Deck B: 3 (green)
+116	LED: Deck B: 4 (blue)
+117	LED: Deck B: 4 (green)
+124	LED: Deck B: Cue
+130	LED: Deck B: Deck B
+131	LED: Deck B: Deck D
+119	LED: Deck B: Deck D button
+138	LED: Deck B: Digit 1 - A
+139	LED: Deck B: Digit 1 - B
+140	LED: Deck B: Digit 1 - C
+141	LED: Deck B: Digit 1 - D
+142	LED: Deck B: Digit 1 - E
+143	LED: Deck B: Digit 1 - F
+144	LED: Deck B: Digit 1 - G
+145	LED: Deck B: Digit 1 - dot
+146	LED: Deck B: Digit 2 - A
+147	LED: Deck B: Digit 2 - B
+148	LED: Deck B: Digit 2 - C
+149	LED: Deck B: Digit 2 - D
+150	LED: Deck B: Digit 2 - E
+151	LED: Deck B: Digit 2 - F
+152	LED: Deck B: Digit 2 - G
+153	LED: Deck B: Digit 2 - dot
+120	LED: Deck B: In
+129	LED: Deck B: Keylock
+118	LED: Deck B: Load
+128	LED: Deck B: Master
+133	LED: Deck B: On Air
+121	LED: Deck B: Out
+125	LED: Deck B: Play
+134	LED: Deck B: Sample 1
+135	LED: Deck B: Sample 2
+136	LED: Deck B: Sample 3
+137	LED: Deck B: Sample 4
+132	LED: Deck B: Samples
+122	LED: Deck B: Shift
+123	LED: Deck B: Sync
+127	LED: Deck B: Tempo down
+126	LED: Deck B: Tempo up
+155	LED: FX1: 1
+156	LED: FX1: 2
+157	LED: FX1: 3
+158	LED: FX1: Mode
+154	LED: FX1: dry/wet
+160	LED: FX2: 1
+161	LED: FX2: 2
+162	LED: FX2: 3
+163	LED: FX2: Mode
+159	LED: FX2: dry/wet
+11	LED: Master: Browser button
+2	LED: Master: Headphone
+3	LED: Master: Master
+6	LED: Master: Master button
+12	LED: Master: Play button
+1	LED: Master: Quant
+10	LED: Master: Quant button
+8	LED: Master: Rec
+9	LED: Master: Size
+4	LED: Master: Snap
+7	LED: Master: Snap button
+13	LED: Master: Undo button
+5	LED: Master: Warning
