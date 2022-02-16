@@ -1,70 +1,58 @@
 #!/usr/bin/env python3
 
+import csv
 import evdev
 import rtmidi
-from subprocess import DEVNULL, STDOUT, check_call
+import subprocess
+
+# TODO: allow user specified event code mappings via CLI option
 
 # Keys are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels. Values ranges are translated
 # from snd-usb-caiaq ranges to MIDI ranges based on the control code. For example, a fader has a value range from 0-4095
 # in snd-usb-caiaq messages, but Mixxx expects MIDI values between 0-127. Thus, integer division by 32 converts the
 # value for all fader CCs from snd-usb-caiaq to MIDI.
-MIDI_MAP = {
-    270: {'cc': 0x01, 'ch': 0},  # Deck A load [BTN]
-    26:  {'cc': 0x02, 'ch': 0},  # Deck A jog wheel press
-    52:  {'cc': 0x03, 'ch': 0},  # Deck A jog wheel turn
-    21:  {'cc': 0x04, 'ch': 0},  # Deck A tempo [FADER]
-    273: {'cc': 0x05, 'ch': 0},  # Deck A tempo range adjust down [BTN]
-    272: {'cc': 0x06, 'ch': 0},  # Deck A tempo range adjust up [BTN]
-    259: {'cc': 0x08, 'ch': 0},  # Deck A sync [BTN]
-    261: {'cc': 0x09, 'ch': 0},  # Deck A cue [BTN]
-    263: {'cc': 0x0A, 'ch': 0},  # Deck A play [BTN]
-    256: {'cc': 0x0B, 'ch': 0},  # Deck A Cue 1 [BTN]
-    258: {'cc': 0x0C, 'ch': 0},  # Deck A Cue 2 [BTN]
-    260: {'cc': 0x0D, 'ch': 0},  # Deck A Cue 3 [BTN]
-    262: {'cc': 0x0E, 'ch': 0},  # Deck A Cue 4 [BTN]
-    265: {'cc': 0x0F, 'ch': 0},  # Deck A Sample 1 [BTN]
-    267: {'cc': 0x10, 'ch': 0},  # Deck A Sample 2 [BTN]
-    269: {'cc': 0x11, 'ch': 0},  # Deck A Sample 3 [BTN]
-    271: {'cc': 0x12, 'ch': 0},  # Deck A Sample 4 [BTN]
-    275: {'cc': 0x13, 'ch': 0},  # Deck A loop move knob press [BTN]
-    55:  {'cc': 0x14, 'ch': 0},  # Deck A loop move knob turn [ROT_ENC]
-    274: {'cc': 0x15, 'ch': 0},  # Deck A loop size knob press [BTN]
-    56:  {'cc': 0x16, 'ch': 0},  # Deck A loop size knob turn [ROT_ENC]
-    266: {'cc': 0x17, 'ch': 0},  # Deck A loop in [BTN]
-    268: {'cc': 0x18, 'ch': 0},  # Deck A loop out [BTN]
-    18:  {'cc': 0x45, 'ch': 0},  # Deck A volume [FADER]
-    310: {'cc': 0x01, 'ch': 1},  # Deck B load [BTN]
-    27:  {'cc': 0x02, 'ch': 1},  # Deck B jog wheel press
-    53:  {'cc': 0x03, 'ch': 1},  # Deck B jog wheel turn
-    22:  {'cc': 0x04, 'ch': 1},  # Deck B tempo [FADER]
-    297: {'cc': 0x05, 'ch': 1},  # Deck B tempo range adjust down [BTN]
-    296: {'cc': 0x06, 'ch': 1},  # Deck B tempo range adjust up [BTN]
-    315: {'cc': 0x08, 'ch': 1},  # Deck B sync [BTN]
-    317: {'cc': 0x09, 'ch': 1},  # Deck B cue [BTN]
-    319: {'cc': 0x0A, 'ch': 1},  # Deck B play [BTN]
-    312: {'cc': 0x0B, 'ch': 1},  # Deck B Cue 1 [BTN]
-    314: {'cc': 0x0C, 'ch': 1},  # Deck B Cue 2 [BTN]
-    316: {'cc': 0x0D, 'ch': 1},  # Deck B Cue 3 [BTN]
-    318: {'cc': 0x0E, 'ch': 1},  # Deck B Cue 4 [BTN]
-    305: {'cc': 0x0F, 'ch': 1},  # Deck B Sample 1 [BTN]
-    307: {'cc': 0x10, 'ch': 1},  # Deck B Sample 2 [BTN]
-    309: {'cc': 0x11, 'ch': 1},  # Deck B Sample 3 [BTN]
-    311: {'cc': 0x12, 'ch': 1},  # Deck B Sample 4 [BTN]
-    299: {'cc': 0x13, 'ch': 1},  # Deck B loop move knob press [BTN]
-    57:  {'cc': 0x14, 'ch': 1},  # Deck B loop move knob turn [ROT_ENC]
-    298: {'cc': 0x15, 'ch': 1},  # Deck B loop size knob press [BTN]
-    58:  {'cc': 0x16, 'ch': 1},  # Deck B loop size knob turn [ROT_ENC]
-    306: {'cc': 0x17, 'ch': 1},  # Deck B loop in [BTN]
-    308: {'cc': 0x18, 'ch': 1},  # Deck B loop out [BTN]
-    17:  {'cc': 0x45, 'ch': 1},  # Deck B volume [FADER]
-    19:  {'cc': 0x45, 'ch': 2},  # Deck C volume [FADER]
-    16:  {'cc': 0x45, 'ch': 3},  # Deck D volume [FADER]
-    # 263: {'cc': 0x0A, 'ch': 2},  # Deck C play (need to check deck toggle state for this to work)
-    # 319: {'cc': 0x0A, 'ch': 3},  # Deck D play (need to check deck toggle state for this to work)
-}
+def load_midi_map_mixer_effect(filename='midi-evcode-map-mixer-effect.csv'):
+    mapping = [None for i in range(350)]
 
+    with open(filename, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        for line in reader:
+            mapping[int(line[0])] = [
+                [int(line[1], 16), int(line[2], 16)],
+                [int(line[3], 16), int(line[4], 16)]
+            ]
+
+    return mapping
+
+MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
+
+
+# Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
+# on the state of these modifiers.
+def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
+    mapping = [None for i in range(320)]
+
+    with open(filename, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        for line in reader:
+            mapping[int(line[0])] = [
+                [int(line[1], 16), int(line[2], 16)],
+                [int(line[3], 16), int(line[4], 16)],
+                [int(line[5], 16), int(line[6], 16)],
+                [int(line[7], 16), int(line[8], 16)]
+            ]
+
+    return mapping
+
+
+MIDI_MAP_DECK = load_midi_map_deck()
+
+# TODO: load ALSA control map from file
 # Keys are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
 ALSA_CONTROL_MAP = {
+    0x01: [74, 118, 74, 118],  # Load [BTN]
     0x08: [79, 123, 79, 123],  # Sync [BTN]
     0x09: [80, 124, 80, 124],  # Cue [BTN]
     0x0B: [66, 110, 66, 110],  # Cue 1 [BTN]
@@ -80,9 +68,19 @@ ALSA_CONTROL_MAP = {
     ],
 }
 
+ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
 BTN_CCS = [0x01, 0x05, 0x06, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x15, 0x17, 0x18]
-FADER_CCS = [0x04, 0x45]
-ROT_ENC_CCS = [0x14, 0x16]
+
+# TODO: probably better to have a single array of strings to determine input types from event codes - faster lookups
+BTN_EVCODES = [270, 310, 267, 307, 269, 309, 271, 311, 275, 299, 274, 298, 266, 306, 268, 308, 273, 297, 272, 296, 259,
+               315, 261, 317, 263, 319, 256, 312, 258, 314, 260, 316, 262, 318, 265, 305, 321, 322, 323, 324, 325, 330,
+               331, 332, 333, 328, 329, 334, 335, 289, 290, 288, 291, 284, 283, 281, 282, 280, 292, 345, 346, 347, 348,
+               349]
+POT_EVCODES = [21, 22, 18, 17, 19, 16, 50, 49, 48, 43, 39, 47, 31, 42, 38, 46, 30, 41, 37, 45, 29, 40, 36, 44, 28, 23,
+               34, 33, 32, 51, 35]
+ROT_EVCODES = [55, 57, 56, 58, 59, 60, 61, 62, 54]
+JOG_POT_EVCODES = [26, 27]
+JOG_ROT_EVCODES = [53, 53]
 
 
 def select_controller_device():
@@ -101,8 +99,63 @@ def select_controller_device():
     return controller
 
 
-def evcode_to_midi(evcode):
-    return MIDI_MAP[evcode] if evcode in MIDI_MAP else {}
+def detect_controller_device():
+    for path in evdev.list_devices():
+        device = evdev.InputDevice(path)
+
+        if device.name.__contains__('Traktor Kontrol S4'):
+            print('Detected evdev:')
+            print(f'{device.name}\t{device.path}\t{device.phys}')
+            return device
+        else:
+            device.close()
+
+    print("Couldn't find your controller. Do you see it in the output of lsusb?")
+    quit()
+
+
+def detect_alsa_device():
+    if ALSA_DEV:
+        print('Detected ALSA device: ')
+        print(subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4"'))
+    else:
+        print("Couldn't find your controller with aplay. Do you have the snd-usb-caiaq installed / enabled?")
+        quit()
+
+
+def evcode_to_midi(evcode, shift_a, shift_b, toggle_ac, toggle_bd):
+    if MIDI_MAP_MIXER_EFFECT[evcode]:
+        if shift_a or shift_b:
+            return MIDI_MAP_MIXER_EFFECT[evcode][1]
+        else:
+            return MIDI_MAP_MIXER_EFFECT[evcode][0]
+    elif MIDI_MAP_DECK[evcode]:
+        # Decks B/D use 0xB1/0xB3
+        if MIDI_MAP_DECK[evcode][1][1] & 1 == 1:
+            if toggle_bd:
+                if shift_b:
+                    return MIDI_MAP_DECK[evcode][3]
+                else:
+                    return MIDI_MAP_DECK[evcode][2]
+            else:
+                if shift_b:
+                    return MIDI_MAP_DECK[evcode][1]
+                else:
+                    return MIDI_MAP_DECK[evcode][0]
+        # Decks A/C use 0xB0/0xB2
+        else:
+            if toggle_ac:
+                if shift_a:
+                    return MIDI_MAP_DECK[evcode][3]
+                else:
+                    return MIDI_MAP_DECK[evcode][2]
+            else:
+                if shift_a:
+                    return MIDI_MAP_DECK[evcode][1]
+                else:
+                    return MIDI_MAP_DECK[evcode][0]
+    else:
+        return []
 
 
 def midi_to_alsa_control(midi_bytes):
@@ -132,18 +185,20 @@ def set_vu_meter(controls, value):
         full_brightness = light // 18
         partial = light % 18
 
-        # Set
         for i in range(full_brightness):
-            check_call(['amixer', '-c', 'TraktorKontrolS', 'cset', f'numid={controls[i]}', '31'], stdout=DEVNULL,
-                       stderr=STDOUT)
+            set_led(controls[i], 31)
+
         if partial:
             alsa_values = [2, 4, 5, 7, 9, 10, 12, 14, 15, 17, 19, 21, 22, 24, 26, 28, 29, 31]
-            check_call(['amixer', '-c', 'TraktorKontrolS', 'cset', f'numid={controls[full_brightness]}',
-                        str(alsa_values[partial - 1])], stdout=DEVNULL, stderr=STDOUT)
+            set_led(controls[full_brightness], alsa_values[partial - 1])
 
     for i in range(full_brightness, 6, 1):
-        check_call(['amixer', '-c', 'TraktorKontrolS', 'cset', f'numid={controls[i]}', '0'], stdout=DEVNULL,
-                   stderr=STDOUT)
+        set_led(controls[i], 0)
+
+
+def set_led(alsa_id, brightness):
+    subprocess.call(['amixer', '-c', ALSA_DEV, 'cset', f'numid={alsa_id}', str(brightness)], stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL)
 
 
 def handle_midi_input(msg, data):
@@ -155,34 +210,55 @@ def handle_midi_input(msg, data):
     cc = msg[0][1]
     value = msg[0][2]
 
-    if cc in BTN_CCS:
-        alsa_val = '31' if value else '0'
-        check_call(['amixer', '-c', 'TraktorKontrolS', 'cset', f'numid={control}', alsa_val], stdout=DEVNULL,
-                   stderr=STDOUT)
-
+    # TODO: handle LED control based on ALSA control code so user can modify mapping without breaking this
     if cc == 0x46:  # Vu meters
         set_vu_meter(control, value)
 
+    if cc in BTN_CCS:
+        alsa_val = 31 if value else 0
+        set_led(control, alsa_val)
+
 
 def main():
-    traktor_s4 = select_controller_device()
-
+    detect_alsa_device()
+    traktor_s4 = detect_controller_device()
     midiin = rtmidi.MidiIn(name='blaxpot')
     inport = midiin.open_virtual_port(name='traktor-s4-mk1-midify')
     inport.set_callback(handle_midi_input)
     midiout = rtmidi.MidiOut(name='blaxpot')
     outport = midiout.open_virtual_port(name='traktor-s4-mk1-midify')
+    shift_a = False
+    shift_b = False
+    toggle_ac = False
+    toggle_bd = False
 
     for event in traktor_s4.read_loop():
-        midi = evcode_to_midi(event.code)
+        # Handle modifier key event codes
+        if event.code == 257:
+            shift_a = not shift_a
+            continue
+
+        if event.code == 264 and event.value:
+            toggle_ac = not toggle_ac
+            continue
+
+        if event.code == 313:
+            shift_b = not shift_b
+            continue
+
+        if event.code == 304 and event.value:
+            toggle_bd = not toggle_bd
+            continue
+
+        midi = evcode_to_midi(event.code, shift_a, shift_b, toggle_ac, toggle_bd)
 
         if not midi:
             continue
 
-        if midi['cc'] in FADER_CCS:
-            outport.send_message([0xb0 + midi['ch'], midi['cc'], event.value // 32])
-        if midi['cc'] in BTN_CCS:
-            outport.send_message([0xb0 + midi['ch'], midi['cc'], event.value])
+        if event.code in POT_EVCODES:
+            outport.send_message([midi[1], midi[0], event.value // 32])
+        if event.code in BTN_EVCODES:
+            outport.send_message([midi[1], midi[0], event.value])
 
     inport.close_port()
     midiin.delete()
