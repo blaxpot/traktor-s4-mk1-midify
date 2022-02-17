@@ -2,76 +2,120 @@
 
 import csv
 import evdev
+import getopt
 import rtmidi
 import subprocess
-
-# TODO: allow user specified event code mappings via CLI option
-
-# Keys are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels. Values ranges are translated
-# from snd-usb-caiaq ranges to MIDI ranges based on the control code. For example, a fader has a value range from 0-4095
-# in snd-usb-caiaq messages, but Mixxx expects MIDI values between 0-127. Thus, integer division by 32 converts the
-# value for all fader CCs from snd-usb-caiaq to MIDI.
-def load_midi_map_mixer_effect(filename='midi-evcode-map-mixer-effect.csv'):
-    mapping = [None for i in range(350)]
-
-    with open(filename, newline='') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-        for line in reader:
-            mapping[int(line[0])] = [
-                [int(line[1], 16), int(line[2], 16)],
-                [int(line[3], 16), int(line[4], 16)]
-            ]
-
-    return mapping
-
-MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
+import sys
 
 
-# Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
-# on the state of these modifiers.
-def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
-    mapping = [None for i in range(320)]
-
-    with open(filename, newline='') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-        for line in reader:
-            mapping[int(line[0])] = [
-                [int(line[1], 16), int(line[2], 16)],
-                [int(line[3], 16), int(line[4], 16)],
-                [int(line[5], 16), int(line[6], 16)],
-                [int(line[7], 16), int(line[8], 16)]
-            ]
-
-    return mapping
+def is_hex(string):
+    try:
+        int(string, 16)
+        return True
+    except ValueError:
+        return False
 
 
-MIDI_MAP_DECK = load_midi_map_deck()
+class Mappings:
+    def __init__(self,
+                 alsa_control_mapping='alsa-control-map.csv',
+                 deck_mapping='midi-evcode-map-deck.csv',
+                 mixer_effect_mapping='midi-evcode-map-mixer-effect.csv'):
+        self.alsa_control = [None for i in range(76)]
+        self.deck = [None for i in range(320)]
+        self.mixer_effect = [None for i in range(350)]
+        self.set_alsa_control_mapping(alsa_control_mapping)
+        self.set_deck_mapping(deck_mapping)
+        self.set_mixer_effect_mapping(mixer_effect_mapping)
 
-# TODO: load ALSA control map from file
-# Keys are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
-ALSA_CONTROL_MAP = {
-    0x01: [74, 118, 74, 118],  # Load [BTN]
-    0x08: [79, 123, 79, 123],  # Sync [BTN]
-    0x09: [80, 124, 80, 124],  # Cue [BTN]
-    0x0B: [66, 110, 66, 110],  # Cue 1 [BTN]
-    0x0C: [68, 112, 68, 112],  # Cue 2 [BTN]
-    0x0D: [70, 114, 70, 114],  # Cue 3 [BTN]
-    0x0E: [72, 116, 72, 116],  # Cue 4 [BTN]
-    0x0A: [81, 125, 81, 125],  # Play [BTN]
-    0x46: [  # Vu meters
-        [*range(16, 23, 1)],
-        [*range(29, 36, 1)],
-        [*range(42, 49, 1)],
-        [*range(55, 62, 1)]
-    ],
-}
+    # Indicies are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
+    def set_alsa_control_mapping(self, filename):
+        with open(filename, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
+            for line in reader:
+                if not is_hex(line[0]):
+                    continue
+
+                cc = int(line[0], 16)
+                self.alsa_control[cc] = [None for i in range(5)]
+
+                for i in range(1, 6, 1):
+                    if line[i].isdigit():
+                        self.alsa_control[cc][i - 1] = int(line[i])
+                    elif all(ele.isdigit() for ele in line[i].split(',')):
+                        self.alsa_control[cc][i - 1] = list(map(int, line[i].split(',')))
+                    else:
+                        self.alsa_control[cc][i - 1] = None
+
+    # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
+    # Decks are affected by the shift modifier key and the deck toggle buttons, so alternate mappings are included based
+    # on the state of these modifiers.
+    def set_deck_mapping(self, filename):
+        with open(filename, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            for line in reader:
+                self.deck[int(line[0])] = [
+                    [int(line[1], 16), int(line[2], 16)],
+                    [int(line[3], 16), int(line[4], 16)],
+                    [int(line[5], 16), int(line[6], 16)],
+                    [int(line[7], 16), int(line[8], 16)]
+                ]
+
+    # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
+    # The mixer / effect unit controls could have alternative functions if shift buttons are in use, so alternate
+    # mappings are included for each event code.
+    def set_mixer_effect_mapping(self, filename):
+        with open(filename, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            for line in reader:
+                self.mixer_effect[int(line[0])] = [
+                    [int(line[1], 16), int(line[2], 16)],
+                    [int(line[3], 16), int(line[4], 16)]
+                ]
+
+
+def usage():
+    print("Usage: traktor-s4-mk1-midify [options]\n"
+          "\n"
+          "Options:\n"
+          "  -a <mapping.csv>\tCSV file mapping MIDI control codes to alsa LED control ids\n"
+          "  -d <mapping.csv>\tCSV file mapping snd-usb-caiaq event codes for deck inputs to MIDI CC codes/channels\n"
+          "  -m <mapping.csv>\tCSV file mapping snd-usb-caiaq event codes for mixer/effect unit inputs to MIDI CC "
+          "codes/channels")
+    quit(1)
+
+
+alsa_control_mapping = 'alsa-control-map.csv'
+deck_mapping = 'midi-evcode-map-deck.csv'
+mixer_effect_mapping = 'midi-evcode-map-mixer-effect.csv'
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], 'a:d:m:')
+except:
+    usage()
+
+for opt, arg in opts:
+    if opt in ['-a']:
+        alsa_control_mapping = arg
+    elif opt in ['-d']:
+        deck_mapping = arg
+    elif opt in ['-m']:
+        mixer_effect_mapping = arg
+    else:
+        usage()
+
+mappings = Mappings(alsa_control_mapping, deck_mapping, mixer_effect_mapping)
+MIDI_MAP_MIXER_EFFECT = mappings.mixer_effect
+MIDI_MAP_DECK = mappings.deck
+ALSA_CONTROL_MAP = mappings.alsa_control
 ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
-BTN_CCS = [0x01, 0x05, 0x06, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x15, 0x17, 0x18]
-
-# TODO: probably better to have a single array of strings to determine input types from event codes - faster lookups
+# TODO: probably better to have an array of strings to determine LED types from ALSA control codes - faster lookup
+# TODO: This is incomplete
+BTN_LED_ALSA_CONTROLS = [74, 118, 79, 123, 80, 124, 66, 110, 68, 112, 70, 114, 72, 116, 81, 125]
+# TODO: probably better to have a single array of strings to determine input types from event codes - faster lookup
 BTN_EVCODES = [270, 310, 267, 307, 269, 309, 271, 311, 275, 299, 274, 298, 266, 306, 268, 308, 273, 297, 272, 296, 259,
                315, 261, 317, 263, 319, 256, 312, 258, 314, 260, 316, 262, 318, 265, 305, 321, 322, 323, 324, 325, 330,
                331, 332, 333, 328, 329, 334, 335, 289, 290, 288, 291, 284, 283, 281, 282, 280, 292, 345, 346, 347, 348,
@@ -163,13 +207,16 @@ def midi_to_alsa_control(midi_bytes):
     channel = midi_bytes[0] & 0x4f
     cc = midi_bytes[1]
 
-    if cc not in ALSA_CONTROL_MAP:
-        return 0
+    if cc >= len(ALSA_CONTROL_MAP):
+        return None
+
+    if not ALSA_CONTROL_MAP[cc]:
+        return None
 
     if channel < len(ALSA_CONTROL_MAP[cc]):
         return ALSA_CONTROL_MAP[cc][channel]
     else:
-        return 0
+        return None
 
 
 # We have 7 volume indicators per channel, one of which indicates clipping, which can be set at 31 brightness levels.
@@ -207,14 +254,11 @@ def handle_midi_input(msg, data):
     if not control:
         return
 
-    cc = msg[0][1]
     value = msg[0][2]
 
-    # TODO: handle LED control based on ALSA control code so user can modify mapping without breaking this
-    if cc == 0x46:  # Vu meters
+    if type(control) is list:  # Vu meters
         set_vu_meter(control, value)
-
-    if cc in BTN_CCS:
+    elif control in BTN_LED_ALSA_CONTROLS:
         alsa_val = 31 if value else 0
         set_led(control, alsa_val)
 
