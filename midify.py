@@ -20,13 +20,16 @@ class Mappings:
     def __init__(self,
                  alsa_control_mapping='alsa-control-map.csv',
                  deck_mapping='midi-evcode-map-deck.csv',
-                 mixer_effect_mapping='midi-evcode-map-mixer-effect.csv'):
+                 mixer_effect_mapping='midi-evcode-map-mixer-effect.csv',
+                 evcode_type_mapping='evcode-type-map.csv'):
         self.alsa_control = [None for i in range(76)]
         self.deck = [None for i in range(320)]
         self.mixer_effect = [None for i in range(350)]
+        self.evcode_types = [None for i in range(350)]
         self.set_alsa_control_mapping(alsa_control_mapping)
         self.set_deck_mapping(deck_mapping)
         self.set_mixer_effect_mapping(mixer_effect_mapping)
+        self.set_evcode_type_mapping(evcode_type_mapping)
 
     # Indicies are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
     def set_alsa_control_mapping(self, filename):
@@ -76,6 +79,18 @@ class Mappings:
                     [int(line[3], 16), int(line[4], 16)]
                 ]
 
+    # Indicies are snd-usb-caiaq event codes, values are characters representing the type of control. B = button,
+    # P = potentiometer, R = rotary encoder, J = jogwheel potentiometer (pressure sensitive plate on top of jogwheels),
+    # S = jogwheel rotary encoder (turning the jog wheel, 'S' for scratch).
+    # This list is used to determine how to translate the values sent by the Linux kernel along with the evcode, which
+    # indicate device states, to MIDI values that Mixxx can understand.
+    def set_evcode_type_mapping(self, filename):
+        with open(filename, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            for line in reader:
+                self.evcode_types[int(line[0])] = line[1]
+
 
 def usage():
     print("Usage: traktor-s4-mk1-midify [options]\n"
@@ -84,16 +99,19 @@ def usage():
           "  -a <mapping.csv>\tCSV file mapping MIDI control codes to alsa LED control ids\n"
           "  -d <mapping.csv>\tCSV file mapping snd-usb-caiaq event codes for deck inputs to MIDI CC codes/channels\n"
           "  -m <mapping.csv>\tCSV file mapping snd-usb-caiaq event codes for mixer/effect unit inputs to MIDI CC "
-          "codes/channels")
+          "codes/channels\n"
+          "  -t <mapping.csv>\tCSV file mapping snd-usb-caiaq event codes to input device type chars\n"
+          "  -h\t\t\tdisplay this help")
     quit(1)
 
 
 alsa_control_mapping = 'alsa-control-map.csv'
 deck_mapping = 'midi-evcode-map-deck.csv'
 mixer_effect_mapping = 'midi-evcode-map-mixer-effect.csv'
+evcode_type_mapping = 'evcode-type-map.csv'
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'a:d:m:')
+    opts, args = getopt.getopt(sys.argv[1:], 'a:d:m:t:')
 except:
     usage()
 
@@ -104,41 +122,17 @@ for opt, arg in opts:
         deck_mapping = arg
     elif opt in ['-m']:
         mixer_effect_mapping = arg
+    elif opt in ['-t']:
+        mixer_effect_mapping = arg
     else:
         usage()
 
-mappings = Mappings(alsa_control_mapping, deck_mapping, mixer_effect_mapping)
+mappings = Mappings(alsa_control_mapping, deck_mapping, mixer_effect_mapping, evcode_type_mapping)
 MIDI_MAP_MIXER_EFFECT = mappings.mixer_effect
 MIDI_MAP_DECK = mappings.deck
 ALSA_CONTROL_MAP = mappings.alsa_control
+EVCODE_TYPES = mappings.evcode_types
 ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
-# TODO: probably better to have a single array of strings to determine input types from event codes - faster lookup
-BTN_EVCODES = [270, 310, 267, 307, 269, 309, 271, 311, 275, 299, 274, 298, 266, 306, 268, 308, 273, 297, 272, 296, 259,
-               315, 261, 317, 263, 319, 256, 312, 258, 314, 260, 316, 262, 318, 265, 305, 321, 322, 323, 324, 325, 330,
-               331, 332, 333, 328, 329, 334, 335, 289, 290, 288, 291, 284, 283, 281, 282, 280, 292, 345, 346, 347, 348,
-               349]
-POT_EVCODES = [21, 22, 18, 17, 19, 16, 50, 49, 48, 43, 39, 47, 31, 42, 38, 46, 30, 41, 37, 45, 29, 40, 36, 44, 28, 23,
-               34, 33, 32, 51, 35]
-ROT_EVCODES = [55, 57, 56, 58, 59, 60, 61, 62, 54]
-JOG_POT_EVCODES = [26, 27]
-JOG_ROT_EVCODES = [53, 53]
-
-
-def select_controller_device():
-    print('List of your devices:')
-    devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
-
-    for i, device in enumerate(devices):
-        print(f'[{i}]\t{device.path}\t{device.name}\t{device.phys}')
-
-    device_id = int(input("Which of these is the controller? "))
-    controller = devices.pop(device_id)
-
-    for device in devices:
-        device.close()
-
-    return controller
-
 
 def detect_controller_device():
     for path in evdev.list_devices():
@@ -160,7 +154,7 @@ def detect_alsa_device():
         print('Detected ALSA device: ')
         print(subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4"'))
     else:
-        print("Couldn't find your controller with aplay. Do you have the snd-usb-caiaq installed / enabled?")
+        print("Couldn't find your controller with aplay. Do you have snd-usb-caiaq installed and enabled?")
         quit()
 
 
@@ -297,9 +291,9 @@ def main():
         if not midi:
             continue
 
-        if event.code in POT_EVCODES:
+        if EVCODE_TYPES[event.code] == 'P':
             outport.send_message([midi[1], midi[0], event.value // 32])
-        if event.code in BTN_EVCODES:
+        if EVCODE_TYPES[event.code] == 'B':
             outport.send_message([midi[1], midi[0], event.value])
 
     inport.close_port()
@@ -310,7 +304,7 @@ def main():
 
 
 def print_events():
-    traktor_s4 = select_controller_device()
+    traktor_s4 = detect_controller_device()
 
     for event in traktor_s4.read_loop():
         print(event)
