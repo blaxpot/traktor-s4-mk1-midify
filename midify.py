@@ -112,9 +112,6 @@ MIDI_MAP_MIXER_EFFECT = mappings.mixer_effect
 MIDI_MAP_DECK = mappings.deck
 ALSA_CONTROL_MAP = mappings.alsa_control
 ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
-# TODO: probably better to have an array of strings to determine LED types from ALSA control codes - faster lookup
-# TODO: This is incomplete
-BTN_LED_ALSA_CONTROLS = [74, 118, 79, 123, 80, 124, 66, 110, 68, 112, 70, 114, 72, 116, 81, 125]
 # TODO: probably better to have a single array of strings to determine input types from event codes - faster lookup
 BTN_EVCODES = [270, 310, 267, 307, 269, 309, 271, 311, 275, 299, 274, 298, 266, 306, 268, 308, 273, 297, 272, 296, 259,
                315, 261, 317, 263, 319, 256, 312, 258, 314, 260, 316, 262, 318, 265, 305, 321, 322, 323, 324, 325, 330,
@@ -256,9 +253,10 @@ def handle_midi_input(msg, data):
 
     value = msg[0][2]
 
+    # TODO: Handle segment displays in elif here, otherwise assume simple LED with 2 states (on/off)
     if type(control) is list:  # Vu meters
         set_vu_meter(control, value)
-    elif control in BTN_LED_ALSA_CONTROLS:
+    else:
         alsa_val = 31 if value else 0
         set_led(control, alsa_val)
 
