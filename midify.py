@@ -268,7 +268,7 @@ def main():
 
 
 def print_events():
-    traktor_s4 = select_controller_device()
+    traktor_s4 = detect_controller_device()
 
     for event in traktor_s4.read_loop():
         print(event)
