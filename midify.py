@@ -6,19 +6,22 @@ import csv
 import evdev
 import rtmidi
 import subprocess
+import time
 
 
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
-def load_midi_map_mixer_effect(filename='midi-evcode-map-mixer-effect.csv'):
+def load_midi_map_mixer_effect(filename="midi-evcode-map-mixer-effect.csv"):
     mapping = [None for _ in range(350)]
 
-    with open(filename, newline='') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    with open(filename, newline="") as csvfile:
+        reader = csv.reader(
+            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+        )
 
         for line in reader:
             mapping[int(line[0])] = [
                 [int(line[1], 16), int(line[2], 16)],
-                [int(line[3], 16), int(line[4], 16)]
+                [int(line[3], 16), int(line[4], 16)],
             ]
 
     return mapping
@@ -30,18 +33,20 @@ MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
 # Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
 # on the state of these modifiers.
-def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
+def load_midi_map_deck(filename="midi-evcode-map-deck.csv"):
     mapping = [None for _ in range(320)]
 
-    with open(filename, newline='') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    with open(filename, newline="") as csvfile:
+        reader = csv.reader(
+            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+        )
 
         for line in reader:
             mapping[int(line[0])] = [
                 [int(line[1], 16), int(line[2], 16)],
                 [int(line[3], 16), int(line[4], 16)],
                 [int(line[5], 16), int(line[6], 16)],
-                [int(line[7], 16), int(line[8], 16)]
+                [int(line[7], 16), int(line[8], 16)],
             ]
 
     return mapping
@@ -50,11 +55,13 @@ def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
 MIDI_MAP_DECK = load_midi_map_deck()
 
 
-def load_evcode_type_map(filename='evcode-type-map.csv'):
+def load_evcode_type_map(filename="evcode-type-map.csv"):
     mapping = [None for _ in range(350)]
 
-    with open(filename, newline='') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    with open(filename, newline="") as csvfile:
+        reader = csv.reader(
+            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+        )
 
         for line in reader:
             mapping[int(line[0])] = line[1]
@@ -79,20 +86,23 @@ ALSA_CONTROL_MAP = {
         [*range(16, 23, 1)],
         [*range(29, 36, 1)],
         [*range(42, 49, 1)],
-        [*range(55, 62, 1)]
+        [*range(55, 62, 1)],
     ],
 }
 
-ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
+ALSA_DEV = subprocess.getoutput(
+    'aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2'
+).replace(":", "")
+
 BTN_CCS = [0x01, 0x05, 0x06, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x15, 0x17, 0x18]
 
 
 def select_controller_device():
-    print('List of your devices:')
+    print("List of your devices:")
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
 
     for i, device in enumerate(devices):
-        print(f'[{i}]\t{device.path}\t{device.name}\t{device.phys}')
+        print(f"[{i}]\t{device.path}\t{device.name}\t{device.phys}")
 
     device_id = int(input("Which of these is the controller? "))
     controller = devices.pop(device_id)
@@ -107,9 +117,9 @@ def detect_controller_device():
     for path in evdev.list_devices():
         device = evdev.InputDevice(path)
 
-        if device.name.__contains__('Traktor Kontrol S4'):
-            print('Detected evdev:')
-            print(f'{device.name}\t{device.path}\t{device.phys}')
+        if device.name.__contains__("Traktor Kontrol S4"):
+            print("Detected evdev:")
+            print(f"{device.name}\t{device.path}\t{device.phys}")
             return device
         else:
             device.close()
@@ -120,10 +130,12 @@ def detect_controller_device():
 
 def detect_alsa_device():
     if ALSA_DEV:
-        print('Detected ALSA device: ')
+        print("Detected ALSA device: ")
         print(subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4"'))
     else:
-        print("Couldn't find your controller with aplay. Do you have the snd-usb-caiaq installed / enabled?")
+        print(
+            "Couldn't find your controller with aplay. Do you have snd-usb-caiaq installed / enabled?"
+        )
         quit()
 
 
@@ -164,7 +176,7 @@ def evcode_to_midi(evcode, shift_a, shift_b, toggle_ac, toggle_bd):
 
 def midi_to_alsa_control(midi_bytes):
     # Bitwise & to get the lower 4 bytes of the MIDI CC
-    channel = midi_bytes[0] & 0x4f
+    channel = midi_bytes[0] & 0x4F
     cc = midi_bytes[1]
 
     if cc not in ALSA_CONTROL_MAP:
@@ -201,8 +213,11 @@ def set_vu_meter(controls, value):
 
 
 def set_led(alsa_id, brightness):
-    subprocess.call(['amixer', '-c', ALSA_DEV, 'cset', f'numid={alsa_id}', str(brightness)], stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
+    subprocess.call(
+        ["amixer", "-c", ALSA_DEV, "cset", f"numid={alsa_id}", str(brightness)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def handle_midi_input(msg, _):
@@ -223,20 +238,87 @@ def handle_midi_input(msg, _):
         set_led(control, alsa_val)
 
 
+def get_jog_rot_value(jog_data):
+    if not jog_data["prev"]:
+        jog_data["prev"] = jog_data["event_value"]
+        jog_data["updated"] = time.time()
+        jog_data["midi_value"] = None
+        return jog_data
+
+    # Get the change in the jogwheel control value since the last event
+    if (
+        jog_data["event_value"] <= 255 and jog_data["prev"] >= 767
+    ):  # value increased past max
+        diff = 1024 - jog_data["prev"] + jog_data["event_value"]
+    elif (
+        jog_data["event_value"] >= 767 and jog_data["prev"] <= 255
+    ):  # value decreased past min
+        diff = jog_data["event_value"] - 1024 - jog_data["prev"]
+    else:
+        diff = jog_data["event_value"] - jog_data["prev"]  # value stayed within range
+
+    jog_data["prev"] = jog_data["event_value"]
+
+    # TODO: Implement a jog wheel sensitivity setting by allowing the user to modify the update rate here (between 1ms
+    # and 100ms maybe?)
+    # If it's been less than 5ms, store the cumulative jogwheel control value change for later and stop processing.
+    if time.time() - jog_data["updated"] < 0.005:
+        jog_data["counter"] += diff
+        jog_data["midi_value"] = None
+        return jog_data
+    else:
+        jog_data["midi_value"] = jog_data["counter"] + diff
+        jog_data["counter"] = 0
+        jog_data["updated"] = time.time()
+
+        # Convert signed int value to unsigned values that Mixxx expects in jogwheel MIDI messages
+        if -64 <= jog_data["midi_value"] < 0:
+            jog_data["midi_value"] = 128 + jog_data["midi_value"]
+        elif jog_data["midi_value"] < -64:
+            jog_data["midi_value"] = 64
+        elif jog_data["midi_value"] >= 63:
+            jog_data["midi_value"] = 63
+
+        return jog_data
+
+
 def main():
     detect_alsa_device()
     traktor_s4 = detect_controller_device()
-    midiin = rtmidi.MidiIn(name='blaxpot')
-    inport = midiin.open_virtual_port(name='traktor-s4-mk1-midify')
+    midiin = rtmidi.MidiIn(name="blaxpot")
+    inport = midiin.open_virtual_port(name="traktor-s4-mk1-midify")
     inport.set_callback(handle_midi_input)
-    midiout = rtmidi.MidiOut(name='blaxpot')
-    outport = midiout.open_virtual_port(name='traktor-s4-mk1-midify')
+    midiout = rtmidi.MidiOut(name="blaxpot")
+    outport = midiout.open_virtual_port(name="traktor-s4-mk1-midify")
     shift_a = False
     shift_b = False
     toggle_ac = False
     toggle_bd = False
+    control_values = [None for _ in range(350)]
+
+    jog_a_data = {
+        "counter": 0,
+        "event_value": None,
+        "prev": None,
+        "updated": time.time(),
+        "midi_value": None,
+    }
+
+    jog_b_data = {
+        "counter": 0,
+        "event_value": None,
+        "prev": None,
+        "updated": time.time(),
+        "midi_value": None,
+    }
 
     for event in traktor_s4.read_loop():
+        # Ignore events which don't change control values
+        if event.value == control_values[event.code]:
+            continue
+
+        control_values[event.code] = event.value
+
         # Handle modifier key event codes
         if event.code == 257:
             shift_a = not shift_a
@@ -267,10 +349,30 @@ def main():
         # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
         # / faders, since these seem to overwhelm Mixxx if used a lot.
         match EVCODE_TYPE_MAP[event.code]:
-            case 'BTN':
+            case "BTN":
                 value = event.value
-            case 'POT':
+            case "POT":
                 value = event.value // 32
+            case "JOG_ROT":
+                match event.code:
+                    case 52:
+                        jog_a_data["event_value"] = control_values[event.code]
+                        jog_a_data = get_jog_rot_value(jog_a_data)
+
+                        if not jog_a_data["midi_value"]:
+                            continue
+
+                        value = jog_a_data["midi_value"]
+                    case 53:
+                        jog_b_data["event_value"] = control_values[event.code]
+                        jog_b_data = get_jog_rot_value(jog_b_data)
+
+                        if not jog_b_data["midi_value"]:
+                            continue
+
+                        value = jog_b_data["midi_value"]
+                    case _:
+                        continue
             case _:
                 continue
 
@@ -286,8 +388,13 @@ def main():
 
 def print_events():
     traktor_s4 = detect_controller_device()
+    control_values = [None for _ in range(350)]
 
     for event in traktor_s4.read_loop():
+        if event.value == control_values[event.code]:
+            continue
+
+        control_values[event.code] = event.value
         print(event)
 
     traktor_s4.close()
