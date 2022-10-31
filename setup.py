@@ -9,7 +9,7 @@ long_description = "Translate events from a Traktor S4 mk1 DJ controller \
 
 setup(
     name="traktor-s4-mk1-midify",
-    version="0.1.0",
+    version="0.1.1pre",
     author="Conal Moloney",
     author_email="blaxpot@blax.site",
     url="https://github.com/blaxpot/traktor-s4-mk1-midify",
