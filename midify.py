@@ -343,11 +343,11 @@ def main():
 
         value = 0
 
+        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
+        # / faders, since these seem to overwhelm Mixxx if used a lot.
         # Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
         # a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
         # Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
-        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
-        # / faders, since these seem to overwhelm Mixxx if used a lot.
         match EVCODE_TYPE_MAP[event.code]:
             case "BTN":
                 value = event.value
@@ -373,6 +373,9 @@ def main():
                         value = jog_b_data["midi_value"]
                     case _:
                         continue
+            case "JOG_TOUCH":
+                if event.value >= 3050:
+                    value = 0x7F
             case _:
                 continue
 
