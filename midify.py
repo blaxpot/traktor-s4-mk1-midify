@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 
+# TODO: allow user specified event code mappings via CLI option
+
 import csv
 import evdev
 import rtmidi
 import subprocess
 
-# TODO: allow user specified event code mappings via CLI option
 
-# Keys are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels. Values ranges are translated
-# from snd-usb-caiaq ranges to MIDI ranges based on the control code. For example, a fader has a value range from 0-4095
-# in snd-usb-caiaq messages, but Mixxx expects MIDI values between 0-127. Thus, integer division by 32 converts the
-# value for all fader CCs from snd-usb-caiaq to MIDI.
+# Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
 def load_midi_map_mixer_effect(filename='midi-evcode-map-mixer-effect.csv'):
-    mapping = [None for i in range(350)]
+    mapping = [None for _ in range(350)]
 
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -25,13 +23,15 @@ def load_midi_map_mixer_effect(filename='midi-evcode-map-mixer-effect.csv'):
 
     return mapping
 
+
 MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
 
 
+# Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
 # Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
 # on the state of these modifiers.
 def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
-    mapping = [None for i in range(320)]
+    mapping = [None for _ in range(320)]
 
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -48,6 +48,21 @@ def load_midi_map_deck(filename='midi-evcode-map-deck.csv'):
 
 
 MIDI_MAP_DECK = load_midi_map_deck()
+
+
+def load_evcode_type_map(filename='evcode-type-map.csv'):
+    mapping = [None for _ in range(350)]
+
+    with open(filename, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        for line in reader:
+            mapping[int(line[0])] = line[1]
+
+    return mapping
+
+
+EVCODE_TYPE_MAP = load_evcode_type_map()
 
 # TODO: load ALSA control map from file
 # Keys are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
@@ -70,17 +85,6 @@ ALSA_CONTROL_MAP = {
 
 ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(':', '')
 BTN_CCS = [0x01, 0x05, 0x06, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x15, 0x17, 0x18]
-
-# TODO: probably better to have a single array of strings to determine input types from event codes - faster lookups
-BTN_EVCODES = [270, 310, 267, 307, 269, 309, 271, 311, 275, 299, 274, 298, 266, 306, 268, 308, 273, 297, 272, 296, 259,
-               315, 261, 317, 263, 319, 256, 312, 258, 314, 260, 316, 262, 318, 265, 305, 321, 322, 323, 324, 325, 330,
-               331, 332, 333, 328, 329, 334, 335, 289, 290, 288, 291, 284, 283, 281, 282, 280, 292, 345, 346, 347, 348,
-               349]
-POT_EVCODES = [21, 22, 18, 17, 19, 16, 50, 49, 48, 43, 39, 47, 31, 42, 38, 46, 30, 41, 37, 45, 29, 40, 36, 44, 28, 23,
-               34, 33, 32, 51, 35]
-ROT_EVCODES = [55, 57, 56, 58, 59, 60, 61, 62, 54]
-JOG_POT_EVCODES = [26, 27]
-JOG_ROT_EVCODES = [53, 53]
 
 
 def select_controller_device():
@@ -201,7 +205,7 @@ def set_led(alsa_id, brightness):
                     stderr=subprocess.DEVNULL)
 
 
-def handle_midi_input(msg, data):
+def handle_midi_input(msg, _):
     control = midi_to_alsa_control(msg[0])
 
     if not control:
@@ -255,10 +259,23 @@ def main():
         if not midi:
             continue
 
-        if event.code in POT_EVCODES:
-            outport.send_message([midi[1], midi[0], event.value // 32])
-        if event.code in BTN_EVCODES:
-            outport.send_message([midi[1], midi[0], event.value])
+        value = 0
+
+        # Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
+        # a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
+        # Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
+        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
+        # / faders, since these seem to overwhelm Mixxx if used a lot.
+        match EVCODE_TYPE_MAP[event.code]:
+            case 'BTN':
+                value = event.value
+            case 'POT':
+                value = event.value // 32
+            case _:
+                continue
+
+        # print('Send MIDI message: Channel: {}, CC: {}, Value: {}'.format(hex(midi[1]), hex(midi[0]), hex(value)))
+        outport.send_message([midi[1], midi[0], value])
 
     inport.close_port()
     midiin.delete()
