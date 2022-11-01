@@ -1,2 +1,0 @@
-evdev==1.4.0
-python-rtmidi==1.4.9

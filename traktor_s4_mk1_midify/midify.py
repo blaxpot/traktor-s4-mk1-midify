@@ -5,13 +5,14 @@
 import argparse
 import csv
 import evdev
+import os
 import rtmidi
 import subprocess
 import time
 
 
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
-def load_midi_map_mixer_effect(filename="midi-evcode-map-mixer-effect.csv"):
+def load_midi_map_mixer_effect(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-mixer-effect.csv")):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
@@ -34,7 +35,7 @@ MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
 # Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
 # on the state of these modifiers.
-def load_midi_map_deck(filename="midi-evcode-map-deck.csv"):
+def load_midi_map_deck(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-deck.csv")):
     mapping = [None for _ in range(320)]
 
     with open(filename, newline="") as csvfile:
@@ -56,7 +57,7 @@ def load_midi_map_deck(filename="midi-evcode-map-deck.csv"):
 MIDI_MAP_DECK = load_midi_map_deck()
 
 
-def load_evcode_type_map(filename="evcode-type-map.csv"):
+def load_evcode_type_map(filename=os.path.join(os.path.dirname(__file__), "evcode-type-map.csv")):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
@@ -95,7 +96,26 @@ ALSA_DEV = subprocess.getoutput(
     'aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2'
 ).replace(":", "")
 
-BTN_CCS = [0x01, 0x05, 0x06, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x15, 0x17, 0x18]
+BTN_CCS = [
+    0x01,
+    0x05,
+    0x06,
+    0x08,
+    0x09,
+    0x0A,
+    0x0B,
+    0x0C,
+    0x0D,
+    0x0E,
+    0x0F,
+    0x10,
+    0x11,
+    0x12,
+    0x13,
+    0x15,
+    0x17,
+    0x18,
+]
 
 
 def select_controller_device():
@@ -206,7 +226,26 @@ def set_vu_meter(controls, value):
             set_led(controls[i], 31)
 
         if partial:
-            alsa_values = [2, 4, 5, 7, 9, 10, 12, 14, 15, 17, 19, 21, 22, 24, 26, 28, 29, 31]
+            alsa_values = [
+                2,
+                4,
+                5,
+                7,
+                9,
+                10,
+                12,
+                14,
+                15,
+                17,
+                19,
+                21,
+                22,
+                24,
+                26,
+                28,
+                29,
+                31,
+            ]
             set_led(controls[full_brightness], alsa_values[partial - 1])
 
     for i in range(full_brightness, 6, 1):
@@ -282,7 +321,7 @@ def get_jog_rot_value(jog_data):
         return jog_data
 
 
-def main():
+def midify():
     jog_sensitivity = 0.005
 
     parser = argparse.ArgumentParser(
@@ -296,7 +335,9 @@ def main():
         help="Adjust jog wheel sensitivity (min: 1, max: 100, default: 5)",
     )
 
-    parser.add_argument("-d", "--debug", action="store_true", help="Show debug log messages")
+    parser.add_argument(
+        "-d", "--debug", action="store_true", help="Show debug log messages"
+    )
     args = parser.parse_args()
 
     if args.jog_sensitivity and 0 < int(args.jog_sensitivity) <= 100:
@@ -403,7 +444,11 @@ def main():
                 continue
 
         if args.debug:
-            print('Send MIDI message: Channel: {}, CC: {}, Value: {}'.format(hex(midi[1]), hex(midi[0]), hex(value)))
+            print(
+                "Send MIDI message: Channel: {}, CC: {}, Value: {}".format(
+                    hex(midi[1]), hex(midi[0]), hex(value)
+                )
+            )
 
         outport.send_message([midi[1], midi[0], value])
 
