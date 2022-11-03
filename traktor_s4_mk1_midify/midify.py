@@ -12,7 +12,9 @@ import time
 
 
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
-def load_midi_map_mixer_effect(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-mixer-effect.csv")):
+def load_midi_map_mixer_effect(
+    filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-mixer-effect.csv")
+):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
@@ -35,7 +37,9 @@ MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
 # Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
 # Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
 # on the state of these modifiers.
-def load_midi_map_deck(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-deck.csv")):
+def load_midi_map_deck(
+    filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-deck.csv")
+):
     mapping = [None for _ in range(320)]
 
     with open(filename, newline="") as csvfile:
@@ -57,7 +61,9 @@ def load_midi_map_deck(filename=os.path.join(os.path.dirname(__file__), "midi-ev
 MIDI_MAP_DECK = load_midi_map_deck()
 
 
-def load_evcode_type_map(filename=os.path.join(os.path.dirname(__file__), "evcode-type-map.csv")):
+def load_evcode_type_map(
+    filename=os.path.join(os.path.dirname(__file__), "evcode-type-map.csv")
+):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
@@ -161,12 +167,12 @@ def detect_alsa_device():
 
 
 def evcode_to_midi(evcode, shift_a, shift_b, toggle_ac, toggle_bd):
-    if MIDI_MAP_MIXER_EFFECT[evcode]:
+    if MIDI_MAP_MIXER_EFFECT[evcode] is not None:
         if shift_a or shift_b:
             return MIDI_MAP_MIXER_EFFECT[evcode][1]
         else:
             return MIDI_MAP_MIXER_EFFECT[evcode][0]
-    elif MIDI_MAP_DECK[evcode]:
+    elif MIDI_MAP_DECK[evcode] is not None:
         # Decks B/D use 0xB1/0xB3
         if MIDI_MAP_DECK[evcode][1][1] & 1 == 1:
             if toggle_bd:
@@ -192,7 +198,7 @@ def evcode_to_midi(evcode, shift_a, shift_b, toggle_ac, toggle_bd):
                 else:
                     return MIDI_MAP_DECK[evcode][0]
     else:
-        return []
+        return None
 
 
 def midi_to_alsa_control(midi_bytes):
@@ -201,12 +207,12 @@ def midi_to_alsa_control(midi_bytes):
     cc = midi_bytes[1]
 
     if cc not in ALSA_CONTROL_MAP:
-        return 0
+        return None
 
     if channel < len(ALSA_CONTROL_MAP[cc]):
         return ALSA_CONTROL_MAP[cc][channel]
     else:
-        return 0
+        return None
 
 
 # We have 7 volume indicators per channel, one of which indicates clipping, which can be set at 31 brightness levels.
@@ -263,7 +269,7 @@ def set_led(alsa_id, brightness):
 def handle_midi_input(msg, _):
     control = midi_to_alsa_control(msg[0])
 
-    if not control:
+    if control is None:
         return
 
     cc = msg[0][1]
@@ -278,47 +284,80 @@ def handle_midi_input(msg, _):
         set_led(control, alsa_val)
 
 
-def get_jog_rot_value(jog_data):
-    if not jog_data["prev"]:
-        jog_data["prev"] = jog_data["event_value"]
+def calculate_jog_midi_value_update_jog_data(event, jog_data):
+    if jog_data["prev_control_value"] is None:
+        jog_data["prev_control_value"] = event.value
         jog_data["updated"] = time.time()
-        jog_data["midi_value"] = None
-        return jog_data
+        return None, jog_data
 
     # Get the change in the jog wheel control value since the last event
     if (
-        jog_data["event_value"] <= 255 and jog_data["prev"] >= 767
+        event.value <= 255 and jog_data["prev_control_value"] >= 767
     ):  # value increased past max
-        diff = 1024 - jog_data["prev"] + jog_data["event_value"]
+        diff = 1024 - jog_data["prev_control_value"] + event.value
     elif (
-        jog_data["event_value"] >= 767 and jog_data["prev"] <= 255
+        event.value >= 767 and jog_data["prev_control_value"] <= 255
     ):  # value decreased past min
-        diff = jog_data["event_value"] - 1024 - jog_data["prev"]
+        diff = event.value - 1024 - jog_data["prev_control_value"]
     else:
-        diff = jog_data["event_value"] - jog_data["prev"]  # value stayed within range
+        diff = event.value - jog_data["prev_control_value"]  # value stayed within range
 
-    jog_data["prev"] = jog_data["event_value"]
+    jog_data["prev_control_value"] = event.value
 
     # If it's been less than the interval specified in jog_sensitivity, store the cumulative jog wheel control value
     # change for later and stop processing.
     if time.time() - jog_data["updated"] < jog_data["sensitivity"]:
         jog_data["counter"] += diff
-        jog_data["midi_value"] = None
-        return jog_data
+        return None, jog_data
     else:
-        jog_data["midi_value"] = jog_data["counter"] + diff
+        midi_value = jog_data["counter"] + diff
         jog_data["counter"] = 0
         jog_data["updated"] = time.time()
 
         # Convert signed int value to unsigned values that Mixxx expects in jog wheel MIDI messages
-        if -64 <= jog_data["midi_value"] < 0:
-            jog_data["midi_value"] = 128 + jog_data["midi_value"]
-        elif jog_data["midi_value"] < -64:
-            jog_data["midi_value"] = 64
-        elif jog_data["midi_value"] >= 63:
-            jog_data["midi_value"] = 63
+        if -64 <= midi_value < 0:
+            midi_value = 128 + midi_value
+        elif midi_value < -64:
+            midi_value = 64
+        elif midi_value >= 63:
+            midi_value = 63
 
-        return jog_data
+        return midi_value, jog_data
+
+
+# Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
+# a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
+# Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
+def calculate_midi_value_update_controller_data(event, controller_data):
+    controller_data["control_values"][event.code] = event.value
+
+    match EVCODE_TYPE_MAP[event.code]:
+        case "BTN":
+            return event.value, controller_data
+        case "POT":
+            value = event.value // 32
+            return value, controller_data
+        case "JOG_ROT":
+            match event.code:
+                case 52:
+                    value, jog_data = calculate_jog_midi_value_update_jog_data(event, controller_data["jog_a"])
+                    controller_data["jog_a"] = jog_data
+                case 53:
+                    value, jog_data = calculate_jog_midi_value_update_jog_data(event, controller_data["jog_b"])
+                    controller_data["jog_b"] = jog_data
+                case _:
+                    return None, controller_data
+
+            return value, controller_data
+        case "JOG_TOUCH":
+            value = 0
+
+            if event.value >= 3050:
+                value = 0x7F
+
+            return value, controller_data
+        case _:
+            return None, controller_data
 
 
 def midify():
@@ -356,32 +395,27 @@ def midify():
     shift_b = False
     toggle_ac = False
     toggle_bd = False
-    control_values = [None for _ in range(350)]
 
-    jog_a_data = {
-        "counter": 0,
-        "event_value": None,
-        "midi_value": None,
-        "prev": None,
-        "sensitivity": jog_sensitivity,
-        "updated": time.time(),
-    }
-
-    jog_b_data = {
-        "counter": 0,
-        "event_value": None,
-        "midi_value": None,
-        "prev": None,
-        "sensitivity": jog_sensitivity,
-        "updated": time.time(),
+    controller_data = {
+        "control_values": [None for _ in range(350)],
+        "jog_a": {
+            "counter": 0,
+            "prev_control_value": None,
+            "sensitivity": jog_sensitivity,
+            "updated": time.time(),
+        },
+        "jog_b": {
+            "counter": 0,
+            "prev_control_value": None,
+            "sensitivity": jog_sensitivity,
+            "updated": time.time(),
+        },
     }
 
     for event in traktor_s4.read_loop():
         # Ignore events which don't change control values
-        if event.value == control_values[event.code]:
+        if event.value == controller_data["control_values"][event.code]:
             continue
-
-        control_values[event.code] = event.value
 
         # Handle modifier key event codes
         if event.code == 257:
@@ -402,46 +436,13 @@ def midify():
 
         midi = evcode_to_midi(event.code, shift_a, shift_b, toggle_ac, toggle_bd)
 
-        if not midi:
+        if midi is None:
             continue
 
-        value = 0
+        value, controller_data = calculate_midi_value_update_controller_data(event, controller_data)
 
-        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
-        # / faders, since these seem to overwhelm Mixxx if used a lot.
-        # Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
-        # a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
-        # Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
-        match EVCODE_TYPE_MAP[event.code]:
-            case "BTN":
-                value = event.value
-            case "POT":
-                value = event.value // 32
-            case "JOG_ROT":
-                match event.code:
-                    case 52:
-                        jog_a_data["event_value"] = control_values[event.code]
-                        jog_a_data = get_jog_rot_value(jog_a_data)
-
-                        if not jog_a_data["midi_value"]:
-                            continue
-
-                        value = jog_a_data["midi_value"]
-                    case 53:
-                        jog_b_data["event_value"] = control_values[event.code]
-                        jog_b_data = get_jog_rot_value(jog_b_data)
-
-                        if not jog_b_data["midi_value"]:
-                            continue
-
-                        value = jog_b_data["midi_value"]
-                    case _:
-                        continue
-            case "JOG_TOUCH":
-                if event.value >= 3050:
-                    value = 0x7F
-            case _:
-                continue
+        if value is None:
+            continue
 
         if args.debug:
             print(
@@ -450,6 +451,8 @@ def midify():
                 )
             )
 
+        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
+        # / faders, since these seem to overwhelm Mixxx if used a lot.
         outport.send_message([midi[1], midi[0], value])
 
     inport.close_port()
