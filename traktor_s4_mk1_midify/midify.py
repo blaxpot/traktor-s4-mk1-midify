@@ -373,55 +373,25 @@ def calculate_midi_value_update_controller_data(event, controller_data):
             value = event.value // 32
             return value, controller_data
         case "JOG_ROT":
-            match event.code:
-                case 52:
-                    value, jog_data = calculate_jog_midi_value_update_jog_data(
-                        event, controller_data["jog_a"]
-                    )
+            jog_rots = ["jog_a", "jog_b"]
+            jog_rot = jog_rots[event.code - 52]  # jog rot event codes are sequential beginning at 52
 
-                    controller_data["jog_a"] = jog_data
-                case 53:
-                    value, jog_data = calculate_jog_midi_value_update_jog_data(
-                        event, controller_data["jog_b"]
-                    )
-
-                    controller_data["jog_b"] = jog_data
-                case _:
-                    return None, controller_data
-
-            return value, controller_data
-        case "GAIN_ROT":
-            match event.code:
-                case 59:
-                    value, gain_data = calculate_gain_midi_value_update_gain_data(
-                        event, controller_data["gain_rot_a"]
-                    )
-
-                    controller_data["gain_rot_a"] = gain_data
-                case 60:
-                    value, gain_data = calculate_gain_midi_value_update_gain_data(
-                        event, controller_data["gain_rot_b"]
-                    )
-
-                    controller_data["gain_rot_b"] = gain_data
-                case 61:
-                    value, gain_data = calculate_gain_midi_value_update_gain_data(
-                        event, controller_data["gain_rot_c"]
-                    )
-
-                    controller_data["gain_rot_c"] = gain_data
-                case 62:
-                    value, gain_data = calculate_gain_midi_value_update_gain_data(
-                        event, controller_data["gain_rot_d"]
-                    )
-
-                    controller_data["gain_rot_d"] = gain_data
-                case _:
-                    return None, controller_data
+            value, controller_data[jog_rot] = calculate_jog_midi_value_update_jog_data(
+                event, controller_data[jog_rot]
+            )
 
             return value, controller_data
         case "ROT":
             return None, controller_data
+        case "GAIN_ROT":
+            gain_rots = ["gain_rot_a", "gain_rot_b", "gain_rot_c", "gain_rot_d"]
+            gain_rot = gain_rots[event.code - 59]  # gain rot event codes are sequential beginning at 59
+
+            value, controller_data[gain_rot] = calculate_gain_midi_value_update_gain_data(
+                event, controller_data[gain_rot]
+            )
+
+            return value, controller_data
         case "JOG_TOUCH":
             value = 0
 
