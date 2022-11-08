@@ -329,8 +329,6 @@ def calculate_jog_midi_value_update_jog_data(event, jog_data):
 # a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
 # Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
 def calculate_midi_value_update_controller_data(event, controller_data):
-    controller_data["control_values"][event.code] = event.value
-
     match EVCODE_TYPE_MAP[event.code]:
         case "BTN":
             return event.value, controller_data
@@ -340,10 +338,14 @@ def calculate_midi_value_update_controller_data(event, controller_data):
         case "JOG_ROT":
             match event.code:
                 case 52:
-                    value, jog_data = calculate_jog_midi_value_update_jog_data(event, controller_data["jog_a"])
+                    value, jog_data = calculate_jog_midi_value_update_jog_data(
+                        event, controller_data["jog_a"]
+                    )
                     controller_data["jog_a"] = jog_data
                 case 53:
-                    value, jog_data = calculate_jog_midi_value_update_jog_data(event, controller_data["jog_b"])
+                    value, jog_data = calculate_jog_midi_value_update_jog_data(
+                        event, controller_data["jog_b"]
+                    )
                     controller_data["jog_b"] = jog_data
                 case _:
                     return None, controller_data
@@ -417,6 +419,15 @@ def midify():
         if event.value == controller_data["control_values"][event.code]:
             continue
 
+        controller_data["control_values"][event.code] = event.value
+
+        if args.debug:
+            print(
+                "[Processing event] Code: {}, Value: {}, Timestamp: {}".format(
+                    event.code, event.value, event.timestamp()
+                )
+            )
+
         # Handle modifier key event codes
         if event.code == 257:
             shift_a = not shift_a
@@ -439,21 +450,23 @@ def midify():
         if midi is None:
             continue
 
-        value, controller_data = calculate_midi_value_update_controller_data(event, controller_data)
+        value, controller_data = calculate_midi_value_update_controller_data(
+            event, controller_data
+        )
 
         if value is None:
             continue
 
-        if args.debug:
-            print(
-                "Send MIDI message: Channel: {}, CC: {}, Value: {}".format(
-                    hex(midi[1]), hex(midi[0]), hex(value)
-                )
-            )
-
         # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
         # / faders, since these seem to overwhelm Mixxx if used a lot.
         outport.send_message([midi[1], midi[0], value])
+
+        if args.debug:
+            print(
+                "[Sent MIDI message] Channel: {}, CC: {}, Value: {}".format(
+                    hex(midi[1]), hex(midi[0]), hex(value)
+                )
+            )
 
     inport.close_port()
     midiin.delete()
