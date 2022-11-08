@@ -4,7 +4,7 @@ requires = ["flit_core >=3.7.1,<4"]
 
 [project]
 name = "traktor_s4_mk1_midify"
-version = "0.3.0"
+version = "0.3.1rc0"
 authors = [
   { name="Conal Moloney", email="blaxpot@blax.site" },
 ]
