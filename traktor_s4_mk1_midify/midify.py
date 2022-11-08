@@ -325,6 +325,43 @@ def calculate_jog_midi_value_update_jog_data(event, jog_data):
         return midi_value, jog_data
 
 
+def calculate_gain_midi_value_update_gain_data(event, gain_data):
+    if gain_data["prev_control_value"] is None:
+        gain_data["prev_control_value"] = event.value
+        gain_data["counter"] = 0x3F
+        gain_data["updated"] = time.time()
+        return 0x3F, gain_data
+
+    # Get the change in the rotary encoder value since the last event
+    if (
+        event.value <= 3 and gain_data["prev_control_value"] >= 12
+    ):  # value increased past max
+        diff = 16 - gain_data["prev_control_value"] + event.value
+    elif (
+        event.value >= 12 and gain_data["prev_control_value"] <= 3
+    ):  # value decreased past min
+        diff = event.value - 16 - gain_data["prev_control_value"]
+    else:
+        diff = event.value - gain_data["prev_control_value"]  # value stayed within range
+
+    gain_data["prev_control_value"] = event.value
+
+    # If it has been less than 5ms since last gain rot message, store cumulative gain rot control data for later and
+    # stop processing.
+    if time.time() - gain_data["updated"] < 0.005:
+        gain_data["conunter"] += diff
+        return None, gain_data
+    else:
+        gain_data["counter"] += diff
+
+        if gain_data["counter"] > 0x7F:
+            gain_data["counter"] = 0x7F
+        elif gain_data["counter"] < 0:
+            gain_data["counter"] = 0
+
+        return gain_data["counter"], gain_data
+
+
 # Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
 # a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
 # Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
@@ -341,16 +378,50 @@ def calculate_midi_value_update_controller_data(event, controller_data):
                     value, jog_data = calculate_jog_midi_value_update_jog_data(
                         event, controller_data["jog_a"]
                     )
+
                     controller_data["jog_a"] = jog_data
                 case 53:
                     value, jog_data = calculate_jog_midi_value_update_jog_data(
                         event, controller_data["jog_b"]
                     )
+
                     controller_data["jog_b"] = jog_data
                 case _:
                     return None, controller_data
 
             return value, controller_data
+        case "GAIN_ROT":
+            match event.code:
+                case 59:
+                    value, gain_data = calculate_gain_midi_value_update_gain_data(
+                        event, controller_data["gain_rot_a"]
+                    )
+
+                    controller_data["gain_rot_a"] = gain_data
+                case 60:
+                    value, gain_data = calculate_gain_midi_value_update_gain_data(
+                        event, controller_data["gain_rot_b"]
+                    )
+
+                    controller_data["gain_rot_b"] = gain_data
+                case 61:
+                    value, gain_data = calculate_gain_midi_value_update_gain_data(
+                        event, controller_data["gain_rot_c"]
+                    )
+
+                    controller_data["gain_rot_c"] = gain_data
+                case 62:
+                    value, gain_data = calculate_gain_midi_value_update_gain_data(
+                        event, controller_data["gain_rot_d"]
+                    )
+
+                    controller_data["gain_rot_d"] = gain_data
+                case _:
+                    return None, controller_data
+
+            return value, controller_data
+        case "ROT":
+            return None, controller_data
         case "JOG_TOUCH":
             value = 0
 
@@ -397,9 +468,9 @@ def midify():
     shift_b = False
     toggle_ac = False
     toggle_bd = False
+    control_values = [None for _ in range(350)]
 
     controller_data = {
-        "control_values": [None for _ in range(350)],
         "jog_a": {
             "counter": 0,
             "prev_control_value": None,
@@ -412,14 +483,29 @@ def midify():
             "sensitivity": jog_sensitivity,
             "updated": time.time(),
         },
+        "browse_rot": {
+            "counter": 0,
+            "prev_control_value": None,
+            "updated": time.time(),
+        },
     }
+
+    for control in ["move", "size", "gain"]:
+        for deck in ["a", "b", "c", "d"]:
+            rotary_encoder = "{}_rot_{}".format(control, deck)
+
+            controller_data[rotary_encoder] = {
+                "counter": 0,
+                "prev_control_value": None,
+                "updated": time.time(),
+            }
 
     for event in traktor_s4.read_loop():
         # Ignore events which don't change control values
-        if event.value == controller_data["control_values"][event.code]:
+        if event.value == control_values[event.code]:
             continue
 
-        controller_data["control_values"][event.code] = event.value
+        control_values[event.code] = event.value
 
         if args.debug:
             print(
@@ -447,6 +533,7 @@ def midify():
 
         midi = evcode_to_midi(event.code, shift_a, shift_b, toggle_ac, toggle_bd)
 
+        # Ignore events with no corresponding MIDI control defined
         if midi is None:
             continue
 
