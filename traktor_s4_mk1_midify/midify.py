@@ -11,16 +11,12 @@ import subprocess
 import time
 
 
-# Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
-def load_midi_map_mixer_effect(
-    filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-mixer-effect.csv")
-):
+# Indicies are snd_usb_caiaq event codes, values are MIDI control change (CC) codes/channels.
+def load_midi_map_mixer_effect(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-mixer-effect.csv")):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
-        reader = csv.reader(
-            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
-        )
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         for line in reader:
             mapping[int(line[0])] = [
@@ -34,18 +30,14 @@ def load_midi_map_mixer_effect(
 MIDI_MAP_MIXER_EFFECT = load_midi_map_mixer_effect()
 
 
-# Indicies are snd-usb-caiaq event codes, values are MIDI control change (CC) codes/channels.
+# Indicies are snd_usb_caiaq event codes, values are MIDI control change (CC) codes/channels.
 # Decks are affected by the shift modifier key and the deck toggle buttons, so we need to send different MIDI data based
 # on the state of these modifiers.
-def load_midi_map_deck(
-    filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-deck.csv")
-):
+def load_midi_map_deck(filename=os.path.join(os.path.dirname(__file__), "midi-evcode-map-deck.csv")):
     mapping = [None for _ in range(320)]
 
     with open(filename, newline="") as csvfile:
-        reader = csv.reader(
-            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
-        )
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         for line in reader:
             mapping[int(line[0])] = [
@@ -61,15 +53,11 @@ def load_midi_map_deck(
 MIDI_MAP_DECK = load_midi_map_deck()
 
 
-def load_evcode_type_map(
-    filename=os.path.join(os.path.dirname(__file__), "evcode-type-map.csv")
-):
+def load_evcode_type_map(filename=os.path.join(os.path.dirname(__file__), "evcode-type-map.csv")):
     mapping = [None for _ in range(350)]
 
     with open(filename, newline="") as csvfile:
-        reader = csv.reader(
-            csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
-        )
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         for line in reader:
             mapping[int(line[0])] = line[1]
@@ -98,9 +86,7 @@ ALSA_CONTROL_MAP = {
     ],
 }
 
-ALSA_DEV = subprocess.getoutput(
-    'aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2'
-).replace(":", "")
+ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(":", "")
 
 BTN_CCS = [
     0x01,
@@ -160,9 +146,7 @@ def detect_alsa_device():
         print("Detected ALSA device: ")
         print(subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4"'))
     else:
-        print(
-            "Couldn't find your controller with aplay. Do you have snd-usb-caiaq installed / enabled?"
-        )
+        print("Couldn't find your controller with aplay. Do you have snd_usb_caiaq installed / enabled?")
         quit()
 
 
@@ -291,13 +275,9 @@ def calculate_jog_midi_value_update_jog_data(event, jog_data):
         return None, jog_data
 
     # Get the change in the jog wheel control value since the last event
-    if (
-        event.value <= 255 and jog_data["prev_control_value"] >= 767
-    ):  # value increased past max
+    if event.value <= 255 and jog_data["prev_control_value"] >= 767:  # value increased past max
         diff = 1024 - jog_data["prev_control_value"] + event.value
-    elif (
-        event.value >= 767 and jog_data["prev_control_value"] <= 255
-    ):  # value decreased past min
+    elif event.value >= 767 and jog_data["prev_control_value"] <= 255:  # value decreased past min
         diff = event.value - 1024 - jog_data["prev_control_value"]
     else:
         diff = event.value - jog_data["prev_control_value"]  # value stayed within range
@@ -333,13 +313,9 @@ def calculate_gain_midi_value_update_gain_data(event, gain_data):
         return 0x3F, gain_data
 
     # Get the change in the rotary encoder value since the last event
-    if (
-        event.value <= 3 and gain_data["prev_control_value"] >= 12
-    ):  # value increased past max
+    if event.value <= 3 and gain_data["prev_control_value"] >= 12:  # value increased past max
         diff = 16 - gain_data["prev_control_value"] + event.value
-    elif (
-        event.value >= 12 and gain_data["prev_control_value"] <= 3
-    ):  # value decreased past min
+    elif event.value >= 12 and gain_data["prev_control_value"] <= 3:  # value decreased past min
         diff = event.value - 16 - gain_data["prev_control_value"]
     else:
         diff = event.value - gain_data["prev_control_value"]  # value stayed within range
@@ -349,10 +325,11 @@ def calculate_gain_midi_value_update_gain_data(event, gain_data):
     # If it has been less than 5ms since last gain rot message, store cumulative gain rot control data for later and
     # stop processing.
     if time.time() - gain_data["updated"] < 0.005:
-        gain_data["conunter"] += diff
+        gain_data["counter"] += diff
         return None, gain_data
     else:
         gain_data["counter"] += diff
+        gain_data["updated"] = time.time()
 
         if gain_data["counter"] > 0x7F:
             gain_data["counter"] = 0x7F
@@ -362,10 +339,43 @@ def calculate_gain_midi_value_update_gain_data(event, gain_data):
         return gain_data["counter"], gain_data
 
 
-# Values ranges are translated from snd-usb-caiaq ranges to MIDI ranges based on the control type. For example,
-# a fader has a value range from 0-4095 in snd-usb-caiaq events, but Mixxx expects MIDI values between 0-127.
-# Thus, integer division by 32 converts the value for all fader CCs from snd-usb-caiaq to MIDI.
-def calculate_midi_value_update_controller_data(event, controller_data):
+def calculate_rot_midi_value_update_rot_data(event, rot_data):
+    if rot_data["prev_control_value"] is None:
+        rot_data["prev_control_value"] = event.value
+        rot_data["updated"] = time.time()
+        return None, rot_data
+
+    # Get the change in the rotary encoder value since the last event
+    if event.value <= 3 and rot_data["prev_control_value"] >= 12:  # value increased past max
+        diff = 16 - rot_data["prev_control_value"] + event.value
+    elif event.value >= 12 and rot_data["prev_control_value"] <= 3:  # value decreased past min
+        diff = event.value - 16 - rot_data["prev_control_value"]
+    else:
+        diff = event.value - rot_data["prev_control_value"]  # value stayed within range
+
+    rot_data["prev_control_value"] = event.value
+
+    # If it has been less than 5ms since last rot message, store cumulative control data for later and stop processing.
+    if time.time() - rot_data["updated"] < 0.005:
+        rot_data["counter"] += diff
+        return None, rot_data
+    else:
+        midi_value = 0x3F + rot_data["counter"] + diff
+        rot_data["counter"] = 0
+        rot_data["updated"] = time.time()
+
+        if midi_value > 0x7F:
+            midi_value = 0x7F
+        elif midi_value < 0:
+            midi_value = 0
+
+        return midi_value, rot_data
+
+
+# Values ranges are translated from snd_usb_caiaq ranges to MIDI ranges based on the control type. For example,
+# a fader has a value range from 0-4095 in snd_usb_caiaq events, but Mixxx expects MIDI values between 0-127.
+# Thus, integer division by 32 converts the value for all fader CCs from snd_usb_caiaq to MIDI.
+def calculate_midi_value_update_controller_data(event, controller_data, toggle_ac, toggle_bd):
     match EVCODE_TYPE_MAP[event.code]:
         case "BTN":
             return event.value, controller_data
@@ -373,23 +383,42 @@ def calculate_midi_value_update_controller_data(event, controller_data):
             value = event.value // 32
             return value, controller_data
         case "JOG_ROT":
+            # TODO: make these deck toggle aware
             jog_rots = ["jog_a", "jog_b"]
             jog_rot = jog_rots[event.code - 52]  # jog rot event codes are sequential beginning at 52
 
-            value, controller_data[jog_rot] = calculate_jog_midi_value_update_jog_data(
-                event, controller_data[jog_rot]
-            )
+            value, controller_data[jog_rot] = calculate_jog_midi_value_update_jog_data(event, controller_data[jog_rot])
+
+            return value, controller_data
+        case "BROWSE_ROT":
+            value, rot_data = calculate_rot_midi_value_update_rot_data(event, controller_data["browse_rot"])
+            controller_data["browse_rot"] = rot_data
 
             return value, controller_data
         case "ROT":
-            return None, controller_data
+            rots = ["move_rot_", "size_rot_", "move_rot_", "size_rot_"]
+            rot = rots[event.code - 55]  # move / size rot event codes are sequential beginning at 55
+
+            if event.code <= 56:
+                if toggle_ac:
+                    rot = rot + "c"
+                else:
+                    rot = rot + "a"
+            else:
+                if toggle_bd:
+                    rot = rot + "d"
+                else:
+                    rot = rot + "b"
+
+            value, controller_data[rot] = calculate_rot_midi_value_update_rot_data(event, controller_data[rot])
+
+            return value, controller_data
         case "GAIN_ROT":
             gain_rots = ["gain_rot_a", "gain_rot_b", "gain_rot_c", "gain_rot_d"]
             gain_rot = gain_rots[event.code - 59]  # gain rot event codes are sequential beginning at 59
 
-            value, controller_data[gain_rot] = calculate_gain_midi_value_update_gain_data(
-                event, controller_data[gain_rot]
-            )
+            value, rot_data = calculate_gain_midi_value_update_gain_data(event, controller_data[gain_rot])
+            controller_data[gain_rot] = rot_data
 
             return value, controller_data
         case "JOG_TOUCH":
@@ -407,7 +436,7 @@ def midify():
     jog_sensitivity = 0.005
 
     parser = argparse.ArgumentParser(
-        description="Convert events generated by the snd-usb-caiaq kernel module to MIDI signals"
+        description="Convert events generated by the snd_usb_caiaq kernel module to MIDI signals"
     )
 
     parser.add_argument(
@@ -417,9 +446,7 @@ def midify():
         help="Adjust jog wheel sensitivity (min: 1, max: 100, default: 5)",
     )
 
-    parser.add_argument(
-        "-d", "--debug", action="store_true", help="Show debug log messages"
-    )
+    parser.add_argument("-d", "--debug", action="store_true", help="Show debug log messages")
     args = parser.parse_args()
 
     if args.jog_sensitivity and 0 < int(args.jog_sensitivity) <= 100:
@@ -508,7 +535,7 @@ def midify():
             continue
 
         value, controller_data = calculate_midi_value_update_controller_data(
-            event, controller_data
+            event, controller_data, toggle_ac, toggle_bd
         )
 
         if value is None:
@@ -519,11 +546,7 @@ def midify():
         outport.send_message([midi[1], midi[0], value])
 
         if args.debug:
-            print(
-                "[Sent MIDI message] Channel: {}, CC: {}, Value: {}".format(
-                    hex(midi[1]), hex(midi[0]), hex(value)
-                )
-            )
+            print("[Sent MIDI message] Channel: {}, CC: {}, Value: {}".format(hex(midi[1]), hex(midi[0]), hex(value)))
 
     inport.close_port()
     midiin.delete()

@@ -4,7 +4,7 @@ requires = ["flit_core >=3.7.1,<4"]
 
 [project]
 name = "traktor_s4_mk1_midify"
-version = "0.2.0"
+version = "0.3.0rc0"
 authors = [
   { name="Conal Moloney", email="blaxpot@blax.site" },
 ]
@@ -28,4 +28,7 @@ traktor-s4-mk1-print-events= "traktor_s4_mk1_midify.midify:print_events"
 [project.urls]
 "Homepaage" = "https://github.com/blaxpot/traktor-s4-mk1-midify"
 "Bug Tracker" = "https://github.com/blaxpot/traktor-s4-mk1-midify/issues"
+
+[tool.black]
+line-length = 120
 
