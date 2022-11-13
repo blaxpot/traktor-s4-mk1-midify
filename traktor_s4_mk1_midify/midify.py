@@ -548,11 +548,13 @@ def midify():
             event, controller_data, toggle_ac, toggle_bd
         )
 
+        # Don't send a MIDI message if calculate_midi_value_update_controller_data doesn't return an appropriate value.
+        # Not all events should trigger a MIDI message, even if they report that a control value has changed. For
+        # instance, it's desireable to rate limit the number of messages sent when the jog wheels are moved (since
+        # this generates a lot of events).
         if value is None:
             continue
 
-        # TODO: consider rate limiting MIDI messages from controls that can produce a lot of messages, e.g. jog wheels
-        # / faders, since these seem to overwhelm Mixxx if used a lot.
         outport.send_message([midi[1], midi[0], value])
 
         if args.debug:
