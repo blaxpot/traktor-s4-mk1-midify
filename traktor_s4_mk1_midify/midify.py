@@ -6,6 +6,7 @@ import argparse
 import csv
 import evdev
 import os
+import re
 import rtmidi
 import subprocess
 import time
@@ -67,47 +68,30 @@ def load_evcode_type_map(filename=os.path.join(os.path.dirname(__file__), "evcod
 
 EVCODE_TYPE_MAP = load_evcode_type_map()
 
-# TODO: load ALSA control map from file
-# Keys are MIDI control codes, values are an array of ALSA numeric control IDs indexed on the MIDI channel.
-ALSA_CONTROL_MAP = {
-    0x01: [74, 118, 74, 118],  # Load [BTN]
-    0x08: [79, 123, 79, 123],  # Sync [BTN]
-    0x09: [80, 124, 80, 124],  # Cue [BTN]
-    0x0B: [66, 110, 66, 110],  # Cue 1 [BTN]
-    0x0C: [68, 112, 68, 112],  # Cue 2 [BTN]
-    0x0D: [70, 114, 70, 114],  # Cue 3 [BTN]
-    0x0E: [72, 116, 72, 116],  # Cue 4 [BTN]
-    0x0A: [81, 125, 81, 125],  # Play [BTN]
-    0x46: [  # Vu meters
-        [*range(16, 23, 1)],
-        [*range(29, 36, 1)],
-        [*range(42, 49, 1)],
-        [*range(55, 62, 1)],
-    ],
-}
 
+def load_midi_alsa_control_map(filename=os.path.join(os.path.dirname(__file__), "midi-alsa-control-map.csv")):
+    mapping = [None for _ in range(71)]
+
+    with open(filename, newline="") as csvfile:
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        for line in reader:
+            line_values = [None for _ in range(5)]
+
+            for i in range(5):
+                if line[i + 1].isdigit():
+                    line_values[i] = int(line[i + 1])
+                elif re.match("[0-9]+,[0-9,]+", line[i + 1]):
+                    cell_values = line[i + 1].split(",")
+                    line_values[i] = [int(value) for value in cell_values]
+
+            mapping[int(line[0], 16)] = line_values
+
+    return mapping
+
+
+MIDI_ALSA_CONTROL_MAP = load_midi_alsa_control_map()
 ALSA_DEV = subprocess.getoutput('aplay -l | grep "Traktor Kontrol S4" | cut -d " " -f 2').replace(":", "")
-
-BTN_CCS = [
-    0x01,
-    0x05,
-    0x06,
-    0x08,
-    0x09,
-    0x0A,
-    0x0B,
-    0x0C,
-    0x0D,
-    0x0E,
-    0x0F,
-    0x10,
-    0x11,
-    0x12,
-    0x13,
-    0x15,
-    0x17,
-    0x18,
-]
 
 
 def select_controller_device():
@@ -186,15 +170,16 @@ def evcode_to_midi(evcode, shift_a, shift_b, toggle_ac, toggle_bd):
 
 
 def midi_to_alsa_control(midi_bytes):
-    # Bitwise & to get the lower 4 bytes of the MIDI CC
-    channel = midi_bytes[0] & 0x4F
     cc = midi_bytes[1]
 
-    if cc not in ALSA_CONTROL_MAP:
+    if MIDI_ALSA_CONTROL_MAP[cc] is None:
         return None
 
-    if channel < len(ALSA_CONTROL_MAP[cc]):
-        return ALSA_CONTROL_MAP[cc][channel]
+    # Bitwise & to get the lower 4 bytes of the MIDI CC
+    channel = midi_bytes[0] & 0x4F
+
+    if channel < len(MIDI_ALSA_CONTROL_MAP[cc]):
+        return MIDI_ALSA_CONTROL_MAP[cc][channel]
     else:
         return None
 
@@ -250,22 +235,31 @@ def set_led(alsa_id, brightness):
     )
 
 
-def handle_midi_input(msg, _):
+def handle_midi_input(msg, args):
     control = midi_to_alsa_control(msg[0])
 
+    # If there is no ALSA control corresponding to the MIDI CC recieved, we should handle LED control between the
+    # snd-usb-caiaq kernel module and this program (i.e. not communicate with Mixxx), as this seems to be the behaviour
+    # of the NI drivers on macOS / Windows.
     if control is None:
         return
 
-    cc = msg[0][1]
+    if args.debug:
+        print(
+            "[Recieved MIDI message] Channel: {}, CC: {}, Value: {}".format(
+                hex(msg[0][0]), hex(msg[0][1]), hex(msg[0][2])
+            )
+        )
+
     value = msg[0][2]
 
-    # TODO: handle LED control based on ALSA control code so user can modify mapping without breaking this
-    if cc == 0x46:  # Vu meters
+    if isinstance(control, list):  # Vu meters
         set_vu_meter(control, value)
-
-    if cc in BTN_CCS:
-        alsa_val = 31 if value else 0
-        set_led(control, alsa_val)
+    else:  # All other MIDI controlled LEDs
+        if value != 0:
+            set_led(control, 31)
+        else:
+            set_led(control, 0)
 
 
 def calculate_jog_midi_value_update_jog_data(event, jog_data):
@@ -458,7 +452,7 @@ def midify():
     traktor_s4 = detect_controller_device()
     midiin = rtmidi.MidiIn(name="blaxpot")
     inport = midiin.open_virtual_port(name="traktor-s4-mk1-midify")
-    inport.set_callback(handle_midi_input)
+    inport.set_callback(handle_midi_input, args)
     midiout = rtmidi.MidiOut(name="blaxpot")
     outport = midiout.open_virtual_port(name="traktor-s4-mk1-midify")
     shift_a = False
@@ -537,6 +531,9 @@ def midify():
         if event.code == 304 and event.value:
             toggle_bd = not toggle_bd
             continue
+
+        # TODO: Handle LED controls that don't respond to MIDI messages on macOS/Windows e.g. deck toggles, shift
+        # buttons, deck active LEDs, etc.
 
         midi = evcode_to_midi(event.code, shift_a, shift_b, toggle_ac, toggle_bd)
 
