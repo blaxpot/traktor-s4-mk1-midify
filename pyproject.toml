@@ -24,6 +24,7 @@ dependencies = [
 [project.scripts]
 traktor-s4-mk1-midify = "traktor_s4_mk1_midify.midify:midify"
 traktor-s4-mk1-print-events= "traktor_s4_mk1_midify.midify:print_events"
+traktor-s4-mk1-leds= "traktor_s4_mk1_midify.midify:leds"
 
 [project.urls]
 "Homepaage" = "https://github.com/blaxpot/traktor-s4-mk1-midify"

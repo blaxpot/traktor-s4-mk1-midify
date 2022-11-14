@@ -184,45 +184,30 @@ def midi_to_alsa_control(midi_bytes):
         return None
 
 
-# We have 7 volume indicators per channel, one of which indicates clipping, which can be set at 31 brightness levels.
-# 18 (brightness levels) * 7 (LEDs) = 126, which is one off the max value Mixxx will send in a MIDI message to indicate
-# Volume (0x7F). Subtract 1 from this value and use this value to set the right number of LEDs at the right brightness.
-#
-# We can skip a few brightness levels as we scale up so that we more or less linearly increase brightness.
+# We have 7 volume indicators per channel, one of which indicates clipping, thus 6 LEDs can be used to display volume.
+# These can be set at 31 brightness levels. 21 (brightness levels) * 6 (LEDs) = 126, which is one off the max value
+# Mixxx will send in a MIDI message to indicate Volume (0x7F = 127). Subtract 1 from this value and use this value to
+# set the # right number of LEDs at the right brightness. We can skip a few brightness levels as we scale up so that we
+# more or less linearly increase brightness.
 def set_vu_meter(controls, value):
-    light = value - 1  # ensure we stay <= 126
-    full_brightness = light // 18
+    full_brightness = 0
 
-    if value:
-        full_brightness = light // 18
-        partial = light % 18
+    if value > 1:
+        light = value - 1  # ensure we stay <= 126
+        full_brightness = light // 21
+        partial = light % 21
 
         for i in range(full_brightness):
             set_led(controls[i], 31)
 
-        if partial:
-            alsa_values = [
-                2,
-                4,
-                5,
-                7,
-                9,
-                10,
-                12,
-                14,
-                15,
-                17,
-                19,
-                21,
-                22,
-                24,
-                26,
-                28,
-                29,
-                31,
-            ]
+        if partial > 0:
+            # A sequence of 20 non-zero brightness levels between 1 and 30
+            alsa_values = [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23, 25, 26, 28, 29]
             set_led(controls[full_brightness], alsa_values[partial - 1])
+    elif value == 1:
+        set_led(controls[0], 1)
 
+    # Turn off LEDs if the volume decreased
     for i in range(full_brightness, 6, 1):
         set_led(controls[i], 0)
 
@@ -574,5 +559,128 @@ def print_events():
 
         control_values[event.code] = event.value
         print(event)
+
+    traktor_s4.close()
+
+
+def midi_leds(brightness):
+    for i in range(len(MIDI_ALSA_CONTROL_MAP)):
+        if MIDI_ALSA_CONTROL_MAP[i] is None:
+            continue
+
+        for j in range(5):
+            if isinstance(MIDI_ALSA_CONTROL_MAP[i][j], list):  # Vu meters
+                for k in range(len(MIDI_ALSA_CONTROL_MAP[i][j])):
+                    set_led(MIDI_ALSA_CONTROL_MAP[i][j][k], brightness)
+            elif MIDI_ALSA_CONTROL_MAP[i][j] is not None:  # All other MIDI controlled LEDs
+                set_led(MIDI_ALSA_CONTROL_MAP[i][j], brightness)
+
+
+def non_midi_leds(brightness):
+    alsa_controls = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        14,
+        15,
+        22,
+        23,
+        27,
+        28,
+        35,
+        36,
+        40,
+        41,
+        48,
+        49,
+        53,
+        54,
+        61,
+        62,
+        67,
+        69,
+        71,
+        73,
+        75,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        111,
+        113,
+        115,
+        117,
+        119,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+    ]
+
+    for control in alsa_controls:
+        set_led(control, brightness)
+
+
+def leds():
+    desc = "Control LEDs on the Traktor S4 mk1. Turns everything off by default. Use flags to turn things on."
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument("-m", "--midi", action="store_true", help="Turn on MIDI controlled LEDs")
+    parser.add_argument("-i", "--internal", action="store_true", help="Turn on non-MIDI controlled LEDs")
+    args = parser.parse_args()
+
+    # LEDs can't be controlled unless a connection to the device is opened
+    traktor_s4 = detect_controller_device()
+
+    if args.midi:
+        midi_leds(31)
+    else:
+        midi_leds(0)
+
+    if args.internal:
+        non_midi_leds(31)
+    else:
+        non_midi_leds(0)
 
     traktor_s4.close()
