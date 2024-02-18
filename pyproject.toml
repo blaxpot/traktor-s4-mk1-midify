@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Get MIDI signals from a Traktor S4 mk1 DJ controller under Linux"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "evdev==1.4.0",
-  "python-rtmidi==1.4.9",
+  "python-rtmidi==1.5.8",
 ]
 
 [project.scripts]
